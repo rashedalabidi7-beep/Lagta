@@ -109,6 +109,20 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
     <button class="btn primary" id="addTopBtn">＋ أضف لقطة جديدة</button>
   </section>
 
+
+  <section class="cloud-panel" style="border:1px solid #30313b;background:#191a20;border-radius:18px;padding:16px;margin:16px 0 20px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+      <div><strong>☁️ المزامنة السحابية</strong><div id="cloudState" style="font-size:12px;color:#a6a7b3;margin-top:6px">جارٍ تجهيز الاتصال…</div></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" id="syncBtn" disabled>مزامنة الآن</button><button class="btn small hidden" id="logoutBtn">تسجيل الخروج</button></div>
+    </div>
+    <form id="authForm" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px">
+      <input id="authEmail" type="email" required autocomplete="email" placeholder="البريد الإلكتروني" style="background:#111216;color:#f4f4f6;border:1px solid #30313b;border-radius:11px;padding:11px">
+      <input id="authPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="كلمة المرور (6 أحرف على الأقل)" style="background:#111216;color:#f4f4f6;border:1px solid #30313b;border-radius:11px;padding:11px">
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">تسجيل الدخول</button><button class="btn" id="signupBtn" type="button">إنشاء حساب</button></div>
+    </form>
+    <p style="font-size:12px;color:#a6a7b3;line-height:1.7;margin-bottom:0">تسجيل الدخول اختياري. تبقى النسخة المحلية متاحة، ويمكنك استخدام النسخ الاحتياطي لنقل بياناتك. لا تضع مفاتيح Secret أو service_role في هذا الملف.</p>
+  </section>
+
   <div class="toolbar">
     <div class="search"><input id="searchInput" type="search" placeholder="ابحث في العناوين والمحتوى والتصنيفات…" autocomplete="off"></div>
     <button class="btn primary" id="addBtn">＋ إضافة</button>
@@ -147,6 +161,7 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
 </dialog>
 <div id="toast" class="toast hidden" role="status"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 (() => {
   'use strict';
@@ -328,9 +343,139 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
     } catch (_) { showToast('تعذّر قراءة الملف. اختر نسخة احتياطية من لقطة.'); }
     event.target.value = '';
   });
+
+  // Supabase: URL and publishable key only. Never put a secret/service_role key here.
+  const SUPABASE_URL = "https://ixoooqcqzuwpkdudkjju.supabase.co";
+  const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_pyNB0J1wka9ceCp1bnKmFA_PItoMjib";
+  let cloud = null, cloudUser = null, cloudBusy = false;
+  function cloudMessage(message, error = false) {
+    const el = $('cloudState');
+    if (!el) return;
+    el.textContent = message;
+    el.style.color = error ? '#ff7777' : '#a6a7b3';
+  }
+  function isUuid(value) {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+  }
+  function updateCloudUI() {
+    const loggedIn = !!cloudUser;
+    $('authForm').classList.toggle('hidden', loggedIn);
+    $('logoutBtn').classList.toggle('hidden', !loggedIn);
+    $('syncBtn').disabled = !loggedIn || cloudBusy;
+  }
+  async function syncCloud() {
+    if (!cloud || !cloudUser || cloudBusy) return;
+    cloudBusy = true; updateCloudUI(); cloudMessage('جارٍ مزامنة اللقطات…');
+    try {
+      const { data: remoteRows, error: fetchError } = await cloud.from('laqta_items')
+        .select('id,user_id,title,type,category,content,url,tags,created_at,updated_at')
+        .eq('user_id', cloudUser.id);
+      if (fetchError) throw fetchError;
+      const remoteById = new Map((remoteRows || []).map(row => [row.id, row]));
+      const uploadRows = [];
+      const localById = new Map();
+
+      for (const item of items) {
+        const id = isUuid(item.id) ? item.id : crypto.randomUUID();
+        const local = {
+          id, user_id: cloudUser.id, title: item.title, type: item.type || 'ملاحظة',
+          category: item.category || 'أخرى', content: item.content || '', url: item.url || '',
+          tags: Array.isArray(item.tags) ? item.tags : [],
+          created_at: item.createdAt || new Date().toISOString(),
+          updated_at: item.updatedAt || item.createdAt || new Date().toISOString()
+        };
+        localById.set(id, local);
+        const remote = remoteById.get(id);
+        // New local-only records upload; for matching IDs, only the newer copy wins.
+        if (!remote || new Date(local.updated_at).getTime() > new Date(remote.updated_at).getTime()) {
+          uploadRows.push(local);
+        }
+      }
+      if (uploadRows.length) {
+        const { error } = await cloud.from('laqta_items').upsert(uploadRows, { onConflict: 'id' });
+        if (error) throw error;
+      }
+      const { data: finalRows, error: finalError } = await cloud.from('laqta_items')
+        .select('id,user_id,title,type,category,content,url,tags,created_at,updated_at')
+        .eq('user_id', cloudUser.id).order('updated_at', { ascending: false });
+      if (finalError) throw finalError;
+      const finalCloud = (finalRows || []).map(row => ({
+        id: row.id, title: row.title, type: row.type, category: row.category,
+        content: row.content, url: row.url, tags: Array.isArray(row.tags) ? row.tags : [],
+        createdAt: row.created_at, updatedAt: row.updated_at
+      }));
+      const finalIds = new Set(finalCloud.map(x => x.id));
+      // Keep any local records that were not uploaded or returned, instead of silently losing them.
+      const localOnly = items.filter(x => !finalIds.has(x.id)).map(x => {
+        const normalized = localById.get(x.id);
+        return normalized ? { ...x, id: normalized.id } : x;
+      });
+      items = [...finalCloud, ...localOnly];
+      saveItems(); render();
+      cloudMessage(`تمت المزامنة بنجاح · ${finalCloud.length} لقطة في السحابة`);
+      showToast('اكتملت المزامنة');
+    } catch (err) {
+      cloudMessage('تعذرت المزامنة: ' + (err.message || 'تحقق من إعدادات الجدول والسياسات'), true);
+      showToast('تعذرت المزامنة؛ لم نحذف بياناتك المحلية');
+    } finally { cloudBusy = false; updateCloudUI(); }
+  }
+  async function doAuth(mode) {
+    if (!cloud) { cloudMessage('تعذر تحميل مكتبة Supabase. تحقق من اتصال الإنترنت.', true); return; }
+    const email = $('authEmail').value.trim(), password = $('authPassword').value;
+    if (!email || password.length < 6) { showToast('أدخل بريدًا صحيحًا وكلمة مرور من 6 أحرف على الأقل.'); return; }
+    cloudMessage('جارٍ الاتصال…');
+    const result = mode === 'signup'
+      ? await cloud.auth.signUp({ email, password })
+      : await cloud.auth.signInWithPassword({ email, password });
+    if (result.error) { cloudMessage('تعذر إكمال العملية: ' + result.error.message, true); return; }
+    if (mode === 'signup' && !result.data.session) {
+      cloudMessage('تم إنشاء الحساب. تحقق من بريدك لتأكيده ثم سجّل الدخول.');
+      showToast('تحقق من بريدك الإلكتروني لتأكيد الحساب'); return;
+    }
+    cloudUser = result.data.user; updateCloudUI();
+    if (cloudUser) await syncCloud();
+  }
+  $('authForm').addEventListener('submit', event => { event.preventDefault(); doAuth('login'); });
+  $('signupBtn').addEventListener('click', () => doAuth('signup'));
+  $('syncBtn').addEventListener('click', syncCloud);
+  $('logoutBtn').addEventListener('click', async () => {
+    if (cloud) await cloud.auth.signOut();
+    cloudUser = null; updateCloudUI();
+    cloudMessage('تم تسجيل الخروج. بياناتك المحلية ما زالت محفوظة على هذا الجهاز.');
+  });
+
+  // Automatically sync changes after saving/deleting while signed in.
+  const originalSaveItems = saveItems;
+  // Save hooks are called from the form and delete handlers below.
+  const originalSubmitHandler = $('itemForm');
+  originalSubmitHandler.addEventListener('submit', () => setTimeout(() => {
+    if (cloudUser) syncCloud();
+  }, 150));
+  grid.addEventListener('click', () => setTimeout(() => {
+    if (cloudUser) syncCloud();
+  }, 150));
+
+  if (window.supabase && window.supabase.createClient) {
+    cloud = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+    cloud.auth.getSession().then(({ data, error }) => {
+      if (error) cloudMessage('تعذر فحص جلسة الدخول: ' + error.message, true);
+      cloudUser = data?.session?.user || null;
+      updateCloudUI();
+      if (cloudUser) syncCloud();
+      else cloudMessage('غير متصل — سجّل الدخول لمزامنة لقطاتك بين الأجهزة.');
+    });
+    cloud.auth.onAuthStateChange((_event, session) => {
+      cloudUser = session?.user || null;
+      updateCloudUI();
+      if (cloudUser) setTimeout(syncCloud, 0);
+    });
+  } else {
+    cloudMessage('تعذر تحميل مكتبة Supabase. افتح الموقع مع اتصال بالإنترنت.', true);
+    updateCloudUI();
+  }
+
   render();
 })();
 </script>
 </body>
-  </html>
-  
+</html>
