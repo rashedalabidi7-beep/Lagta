@@ -80,7 +80,18 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
 .notice{font-size:12px;color:var(--muted);line-height:1.7;padding:12px;border-radius:12px;background:#ffffff06}
 .toast{position:fixed;bottom:20px;right:50%;transform:translateX(50%);background:var(--accent);color:var(--accent-ink);font-weight:700;padding:11px 17px;border-radius:12px;box-shadow:var(--shadow);z-index:10;max-width:calc(100% - 24px);font-size:13px}
 .hidden{display:none!important}
-@media(max-width:620px){.app{padding:16px 12px 35px}header{align-items:flex-start}.header-actions .btn span{display:none}.header-actions .btn{padding:10px 12px}.hero{padding:20px}.stats{gap:7px}.stat{padding:11px}.stat strong{font-size:21px}.grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.item{padding:15px}}
+.settings-grid{display:grid;gap:14px;padding:18px}
+.settings-card{border:1px solid var(--line);background:linear-gradient(145deg,#1c1d24,#15161b);border-radius:16px;padding:16px}
+.settings-card h4{margin:0 0 7px;font-size:16px}
+.settings-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.8}
+.settings-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.account-status{display:flex;align-items:flex-start;gap:10px}
+.status-dot{width:10px;height:10px;border-radius:50%;background:#a6a7b3;margin-top:6px;flex:none}
+.status-dot.online{background:#c5f36b;box-shadow:0 0 0 4px #c5f36b18}
+#settingsDialog .modal-body{padding:0;display:block}
+#settingsDialog .modal-actions{padding-top:16px}
+@media(max-width:620px){.settings-grid{padding:12px}.settings-card{padding:14px}.header-actions .btn span{display:inline}.header-actions .btn{padding:10px 12px}}
+@media(max-width:620px){.cloud-panel{padding:14px!important}.cloud-panel form{grid-template-columns:1fr!important}.cloud-panel form>div{display:grid!important;grid-template-columns:1fr 1fr}.cloud-panel form button{width:100%}.app{padding:16px 12px 35px}header{align-items:flex-start}.header-actions .btn span{display:none}.header-actions .btn{padding:10px 12px}.hero{padding:20px}.stats{gap:7px}.stat{padding:11px}.stat strong{font-size:21px}.grid{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}.item{padding:15px}}
 </style>
 </head>
 <body>
@@ -91,9 +102,7 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
       <div><h1>لقطة</h1><div class="subtitle">مساحتك الشخصية للأفكار التي تستحق البقاء</div></div>
     </div>
     <div class="header-actions">
-      <button class="btn" id="exportBtn" title="تصدير نسخة احتياطية">↗ <span>نسخة احتياطية</span></button>
-      <button class="btn" id="importBtn" title="استيراد نسخة احتياطية">↙ <span>استيراد</span></button>
-      <input type="file" id="importFile" accept="application/json,.json" hidden>
+      <button class="btn" id="settingsBtn" title="الإعدادات">⚙️ <span>الإعدادات</span></button>
     </div>
   </header>
 
@@ -110,18 +119,7 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
   </section>
 
 
-  <section class="cloud-panel" style="border:1px solid #30313b;background:#191a20;border-radius:18px;padding:16px;margin:16px 0 20px">
-    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
-      <div><strong>☁️ المزامنة السحابية</strong><div id="cloudState" style="font-size:12px;color:#a6a7b3;margin-top:6px">جارٍ تجهيز الاتصال…</div></div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn small" id="syncBtn" disabled>مزامنة الآن</button><button class="btn small hidden" id="logoutBtn">تسجيل الخروج</button></div>
-    </div>
-    <form id="authForm" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px;margin-top:14px">
-      <input id="authEmail" type="email" required autocomplete="email" placeholder="البريد الإلكتروني" style="background:#111216;color:#f4f4f6;border:1px solid #30313b;border-radius:11px;padding:11px">
-      <input id="authPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="كلمة المرور (6 أحرف على الأقل)" style="background:#111216;color:#f4f4f6;border:1px solid #30313b;border-radius:11px;padding:11px">
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" type="submit">تسجيل الدخول</button><button class="btn" id="signupBtn" type="button">إنشاء حساب</button></div>
-    </form>
-    <p style="font-size:12px;color:#a6a7b3;line-height:1.7;margin-bottom:0">تسجيل الدخول اختياري. تبقى النسخة المحلية متاحة، ويمكنك استخدام النسخ الاحتياطي لنقل بياناتك. لا تضع مفاتيح Secret أو service_role في هذا الملف.</p>
-  </section>
+
 
   <div class="toolbar">
     <div class="search"><input id="searchInput" type="search" placeholder="ابحث في العناوين والمحتوى والتصنيفات…" autocomplete="off"></div>
@@ -139,8 +137,43 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
 
   <div class="section-head"><h3 id="listTitle">لقطاتك</h3><span class="muted" id="resultsCount">0 عناصر</span></div>
   <main class="grid" id="itemsGrid" aria-live="polite"></main>
-  <footer>لقطة — نسخة أولى تحفظ بياناتك على هذا الجهاز والمتصفح فقط.</footer>
+  <footer>لقطة — احفظ معرفتك، ونظّمها، وارجع إليها من أي جهاز بعد تفعيل المزامنة السحابية.</footer>
 </div>
+
+
+<dialog id="settingsDialog">
+  <div class="modal-head"><h3>⚙️ الإعدادات</h3><button type="button" class="icon-btn" id="closeSettings" aria-label="إغلاق الإعدادات">✕</button></div>
+  <div class="modal-body">
+    <div class="settings-grid">
+      <section class="settings-card">
+        <h4>الحساب والمزامنة السحابية</h4>
+        <p>سجّل الدخول لمزامنة لقطاتك بين الأجهزة. يمكنك استخدام التطبيق محليًا دون حساب.</p>
+        <div class="account-status" style="margin-top:12px"><span class="status-dot" id="accountStatusDot"></span><div><strong id="accountStatusTitle">حالة الحساب</strong><div id="cloudState" style="font-size:12px;color:#a6a7b3;line-height:1.8;margin-top:4px">جارٍ تجهيز الاتصال…</div></div></div>
+        <form id="authForm" style="display:grid;grid-template-columns:1fr;gap:10px;margin-top:14px">
+          <input id="authEmail" type="email" required autocomplete="email" placeholder="البريد الإلكتروني" style="background:#111216;color:#f4f4f6;border:1px solid #30313b;border-radius:11px;padding:11px">
+          <input id="authPassword" type="password" required minlength="6" autocomplete="current-password" placeholder="كلمة المرور (6 أحرف على الأقل)" style="background:#111216;color:#f4f4f6;border:1px solid #30313b;border-radius:11px;padding:11px">
+          <div class="settings-actions" style="margin-top:0"><button class="btn primary" type="submit">تسجيل الدخول</button><button class="btn" id="signupBtn" type="button">إنشاء حساب</button></div>
+        </form>
+        <div class="settings-actions"><button class="btn" id="syncBtn" disabled>☁️ مزامنة الآن</button><button class="btn danger hidden" id="logoutBtn">تسجيل الخروج</button></div>
+        <p style="margin-top:12px">إذا أنشأت حسابًا جديدًا، افتح رسالة التأكيد في بريدك. لا تشارك كلمة المرور أو مفاتيح Supabase السرية.</p>
+      </section>
+      <section class="settings-card" aria-label="النسخ الاحتياطي">
+        <h4>🗂️ النسخ الاحتياطي ونقل البيانات</h4>
+        <p>احتفظ بنسخة من لقطاتك أو استعد نسخة سابقة. لا تحذف بيانات المتصفح قبل التأكد من وجود نسخة احتياطية.</p>
+        <div class="settings-actions">
+          <button class="btn" id="exportBtn" title="تصدير نسخة احتياطية">↗ تصدير نسخة احتياطية</button>
+          <button class="btn" id="importBtn" title="استيراد نسخة احتياطية">↙ استيراد نسخة</button>
+          <input type="file" id="importFile" accept="application/json,.json" hidden>
+        </div>
+      </section>
+      <section class="settings-card">
+        <h4>ℹ️ حول لقطة</h4>
+        <p>لقطة مساحة شخصية لحفظ الأفكار والمقالات والروابط والاقتباسات. تحفظ النسخة المحلية بياناتك في هذا المتصفح، بينما تتيح المزامنة نقلها إلى حسابك السحابي.</p>
+      </section>
+    </div>
+  </div>
+  <div class="modal-actions"><button class="btn" type="button" id="doneSettings">تم</button></div>
+</dialog>
 
 <dialog id="itemDialog">
   <form id="itemForm">
@@ -166,6 +199,7 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
 (() => {
   'use strict';
   const STORAGE_KEY = 'laqta_items_v1';
+  // App data stays local unless cloud sync is explicitly enabled by signing in.
   const $ = id => document.getElementById(id);
   const grid = $('itemsGrid');
   let items = loadItems();
@@ -265,7 +299,7 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
     items = items.filter(x => x.id !== id);
     saveItems(); render(); showToast('تم حذف اللقطة');
   }
-  $('itemForm').addEventListener('submit', event => {
+    $('itemForm').addEventListener('submit', event => {
     event.preventDefault();
     const title = $('itemTitle').value.trim();
     if (!title) { $('itemTitle').focus(); return; }
@@ -301,7 +335,7 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
     activeFilter = button.dataset.filter;
     document.querySelectorAll('.chip').forEach(chip => chip.classList.toggle('active', chip === button));
     render();
-    });
+  });
   $('searchInput').addEventListener('input', render);
   $('addBtn').addEventListener('click', () => openDialog());
   $('addTopBtn').addEventListener('click', () => openDialog());
@@ -362,6 +396,8 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
     $('authForm').classList.toggle('hidden', loggedIn);
     $('logoutBtn').classList.toggle('hidden', !loggedIn);
     $('syncBtn').disabled = !loggedIn || cloudBusy;
+    $('accountStatusDot').classList.toggle('online', loggedIn);
+    $('accountStatusTitle').textContent = loggedIn ? 'تم تسجيل الدخول' : 'غير مسجّل الدخول';
   }
   async function syncCloud() {
     if (!cloud || !cloudUser || cloudBusy) return;
@@ -374,18 +410,21 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
       const remoteById = new Map((remoteRows || []).map(row => [row.id, row]));
       const uploadRows = [];
       const localById = new Map();
+      // Normalize IDs in the local collection first so newly assigned UUIDs remain stable
+      // after the sync. This avoids reporting a successful sync while local IDs stay stale.
+      items = items.map(item => ({ ...item, id: isUuid(item.id) ? item.id : crypto.randomUUID() }));
+      saveItems();
 
       for (const item of items) {
-        const id = isUuid(item.id) ? item.id : crypto.randomUUID();
         const local = {
-          id, user_id: cloudUser.id, title: item.title, type: item.type || 'ملاحظة',
+          id: item.id, user_id: cloudUser.id, title: item.title, type: item.type || 'ملاحظة',
           category: item.category || 'أخرى', content: item.content || '', url: item.url || '',
           tags: Array.isArray(item.tags) ? item.tags : [],
           created_at: item.createdAt || new Date().toISOString(),
           updated_at: item.updatedAt || item.createdAt || new Date().toISOString()
         };
-        localById.set(id, local);
-        const remote = remoteById.get(id);
+        localById.set(item.id, local);
+        const remote = remoteById.get(item.id);
         // New local-only records upload; for matching IDs, only the newer copy wins.
         if (!remote || new Date(local.updated_at).getTime() > new Date(remote.updated_at).getTime()) {
           uploadRows.push(local);
@@ -406,10 +445,7 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
       }));
       const finalIds = new Set(finalCloud.map(x => x.id));
       // Keep any local records that were not uploaded or returned, instead of silently losing them.
-      const localOnly = items.filter(x => !finalIds.has(x.id)).map(x => {
-        const normalized = localById.get(x.id);
-        return normalized ? { ...x, id: normalized.id } : x;
-      });
+      const localOnly = items.filter(x => !finalIds.has(x.id));
       items = [...finalCloud, ...localOnly];
       saveItems(); render();
       cloudMessage(`تمت المزامنة بنجاح · ${finalCloud.length} لقطة في السحابة`);
@@ -449,6 +485,11 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
       updateCloudUI();
     }
   }
+  const settingsDialog = $('settingsDialog');
+  $('settingsBtn').addEventListener('click', () => settingsDialog.showModal());
+  $('closeSettings').addEventListener('click', () => settingsDialog.close());
+  $('doneSettings').addEventListener('click', () => settingsDialog.close());
+  settingsDialog.addEventListener('click', event => { if (event.target === settingsDialog) settingsDialog.close(); });
   $('authForm').addEventListener('submit', event => { event.preventDefault(); doAuth('login'); });
   $('signupBtn').addEventListener('click', () => doAuth('signup'));
   $('syncBtn').addEventListener('click', syncCloud);
