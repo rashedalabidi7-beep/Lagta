@@ -301,7 +301,7 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
     activeFilter = button.dataset.filter;
     document.querySelectorAll('.chip').forEach(chip => chip.classList.toggle('active', chip === button));
     render();
-  });
+    });
   $('searchInput').addEventListener('input', render);
   $('addBtn').addEventListener('click', () => openDialog());
   $('addTopBtn').addEventListener('click', () => openDialog());
@@ -419,21 +419,35 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
       showToast('تعذرت المزامنة؛ لم نحذف بياناتك المحلية');
     } finally { cloudBusy = false; updateCloudUI(); }
   }
+  function getAppRedirectUrl() {
+    // GitHub Pages serves this app under /Lagta/, so preserve the exact deployed path.
+    return window.location.origin + window.location.pathname;
+  }
   async function doAuth(mode) {
-    if (!cloud) { cloudMessage('تعذر تحميل مكتبة Supabase. تحقق من اتصال الإنترنت.', true); return; }
+    if (!cloud) { cloudMessage('تعذر تحميل مكتبة Supabase. تحقق من اتصال الإنترنت ثم أعد تحميل الصفحة.', true); return; }
     const email = $('authEmail').value.trim(), password = $('authPassword').value;
     if (!email || password.length < 6) { showToast('أدخل بريدًا صحيحًا وكلمة مرور من 6 أحرف على الأقل.'); return; }
-    cloudMessage('جارٍ الاتصال…');
-    const result = mode === 'signup'
-      ? await cloud.auth.signUp({ email, password })
-      : await cloud.auth.signInWithPassword({ email, password });
-    if (result.error) { cloudMessage('تعذر إكمال العملية: ' + result.error.message, true); return; }
-    if (mode === 'signup' && !result.data.session) {
-      cloudMessage('تم إنشاء الحساب. تحقق من بريدك لتأكيده ثم سجّل الدخول.');
-      showToast('تحقق من بريدك الإلكتروني لتأكيد الحساب'); return;
+    const submitButtons = $('authForm').querySelectorAll('button');
+    submitButtons.forEach(button => button.disabled = true);
+    cloudMessage(mode === 'signup' ? 'جارٍ إنشاء الحساب…' : 'جارٍ تسجيل الدخول…');
+    try {
+      const result = mode === 'signup'
+        ? await cloud.auth.signUp({ email, password, options: { emailRedirectTo: getAppRedirectUrl() } })
+        : await cloud.auth.signInWithPassword({ email, password });
+      if (result.error) { cloudMessage('تعذر إكمال العملية: ' + result.error.message, true); return; }
+      if (mode === 'signup' && !result.data.session) {
+        cloudMessage('تم إنشاء الحساب. افتح رسالة التأكيد الجديدة في بريدك، ثم ارجع إلى هذا الموقع وسجّل الدخول. إذا وصلك رابط قديم يفتح localhost فتجاهله واطلب رسالة جديدة.');
+        showToast('تم إنشاء الحساب؛ تحقق من بريدك لتأكيده'); return;
+      }
+      cloudUser = result.data.user || result.data.session?.user || null;
+      updateCloudUI();
+      if (cloudUser) await syncCloud();
+    } catch (err) {
+      cloudMessage('حدث خطأ اتصال: ' + (err?.message || 'تحقق من الإنترنت وإعدادات Supabase ثم حاول مجددًا.'), true);
+    } finally {
+      submitButtons.forEach(button => button.disabled = false);
+      updateCloudUI();
     }
-    cloudUser = result.data.user; updateCloudUI();
-    if (cloudUser) await syncCloud();
   }
   $('authForm').addEventListener('submit', event => { event.preventDefault(); doAuth('login'); });
   $('signupBtn').addEventListener('click', () => doAuth('signup'));
@@ -462,8 +476,13 @@ dialog::backdrop{background:#0009;backdrop-filter:blur(4px)}
       cloudUser = data?.session?.user || null;
       updateCloudUI();
       if (cloudUser) syncCloud();
-      else cloudMessage('غير متصل — سجّل الدخول لمزامنة لقطاتك بين الأجهزة.');
-    });
+      else {
+        const hash = new URLSearchParams(window.location.hash.slice(1));
+        const authError = hash.get('error_description') || hash.get('error');
+        if (authError) cloudMessage('تعذر تأكيد البريد: ' + decodeURIComponent(authError.replace(/\+/g, ' ')) + ' — تحقق من إعداد Site URL وRedirect URLs في Supabase.', true);
+        else cloudMessage('غير متصل — سجّل الدخول لمزامنة لقطاتك بين الأجهزة.');
+      }
+    }).catch(err => cloudMessage('تعذر فحص جلسة الدخول: ' + (err?.message || 'خطأ اتصال'), true));
     cloud.auth.onAuthStateChange((_event, session) => {
       cloudUser = session?.user || null;
       updateCloudUI();
